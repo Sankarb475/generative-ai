@@ -65,6 +65,434 @@ This is a very advanced scaling technique
 databases. This is a complex, Enterprise-only feature for highly distributed data
 
 
+============================================================================================================================================
+Neo4j Read, Write, High Availability
+============================================================================================================================================
+Read:
+Read requests can be served by any core server (follower) or read replica
+
+
+Writes:
+All write transactions are sent to the leader. The leader then uses the Raft protocol to replicate the transaction to the followers. 
+A write is considered committed only after a quorum (a majority of core servers) has acknowledged the change. This guarantees data durability.
+
+
+High Availability:
+If the leader fails, the remaining core servers will elect a new leader from among the followers, ensuring continuous write availability. 
+Read replicas are independent of this and continue to serve reads
+
+
+
+============================================================================================================================================
+Neo4j concepts
+============================================================================================================================================
+1) Property Graph Model: This is the heart of Neo4j. Be prepared to define it with its four key components:
+
+Nodes: 
+-- Represent entities (e.g., Person, Product). 
+-- They can have labels (like a class or a table) and properties (key-value pairs, like attributes).
+
+Relationships: 
+-- Connect two nodes, giving the graph its structure. 
+-- They are typed (e.g., FRIENDS_WITH, PURCHASED), directed, and can also have properties.
+
+Properties: 
+-- Key-value pairs on nodes and relationships.
+
+Labels: 
+-- Group nodes together for easy querying and indexing.
+
+-- Neo4j follows ACID transaction.
+
+
+2) Sharding =>
+Sharding is a method of distributing data across multiple machines (shards) to scale horizontally. Each shard contains only a subset of the data,
+and queries may need to access multiple shards.
+
+Example: A user graph is split into 10 million-user subgraphs, each living on a different server.
+Sharding is common in RDBMS and NoSQL (MongoDB, Cassandra), but in graph databases it introduces complexity in traversals across shards.
+
+In graph databases, relationships are first-class citizens. Traversals depend on fast pointer hops between nodes.
+If Node A is on Server 1 and its connected Node B is on Server 2, traversal becomes network-bound → slow.
+Graphs tend to be highly connected, making clean sharding difficult.
+
+
+
+3) Neo4j Fabric =>
+Neo4j Fabric is Neo4j’s federation/sharding approach.
+It allows you to query across multiple Neo4j databases (sharded or not) as if they were one.
+
+Key Features:
+-- Think of Fabric as a query router and coordinator.
+-- You can split data across databases by region, tenant, time, etc.
+-- Supports cypher queries that span databases.
+-- Good for multi-tenancy, large datasets, or archiving.
+
+Example use case:
+>>> USE europe.customer1_db
+MATCH (n:User)-[:BOUGHT]->(p:Product) RETURN n, p
+
+
+
+3) Causal clustering 
+-- Neo4j Causal Cluster is an architecture for high availability and read scaling. It's a group of Neo4j instances that work together as 
+a single logical database
+-- A minimum of three instances that form a quorum. They are responsible for handling all write operations and ensuring data durability 
+using the Raft Protocol. One core server is the Leader (handles writes), and the others are Followers (replicate the data)
+
+
+Read Replicas: 
+Optional, but essential for read scaling. These are instances that connect to the core servers, receive a stream of data updates, 
+and serve read requests. They cannot perform write operations
+
+
+
+
+4) Bolt connection 
+-- Bolt is a high-performance, binary, client-server protocol specifically designed by Neo4j for efficient communication.
+-- much faster than using a generic HTTP REST API cause it's a lightweight binary protocol, reduces overhead of sending & parsing text-based data
+-- designed for graph traversal and is state-aware, meaning it keeps the connection open and remembers the state of the session
+-- Bolt is used to pass bookmarks, which are key to ensuring causal consistency in a clustered environment
+
+-- When you connect to a Neo4j Causal Cluster, the Bolt protocol handles the routing of requests. It automatically directs writes to the 
+leader and distributes read requests to the read replicas, simplifying client-side application logic
+
+
+
+5) Causal Consistency (Bookmarks): 
+-- This is a critical concept in a distributed system. 
+-- It guarantees that an application will not read data older than the last data it wrote. 
+-- An application gets a "bookmark" from the database after a successful write. It can then send this bookmark with its subsequent read request. 
+The cluster's router will ensure that the read is served by an instance that has processed that specific transaction, preventing a stale read.
+
+
+
+============================================================================================================================================
+Neo4j INDEX and CONSTRAINTS
+============================================================================================================================================
+*** INDEXES 
+
+>>> SHOW INDEXES
+>>> SHOW CONSTRAINTS
+
+1) Single-property Index:
+-- Creates an index on a single property of a label.
+
+>>> CREATE INDEX property_index FOR (P:Person) ON (P.Property)
+
+
+2) Composite Index:
+-- Creates an index on multiple properties of a label
+
+>>> CREATE INDEX composite_index FOR (P:Person) ON (P.property1, P.property2)
+
+
+3) Text Index
+-- Optimized for full-text search operations
+
+>>> CREATE FULLTEXT INDEX full_index FOR (P:Person) ON EACH [p.name, p.location]
+
+
+
+*** CONSTRAINTS
+1) Uniqueness Constraint
+-- Ensures that a property (or combination of properties) is unique across all nodes with a label.
+
+>>> CREATE CONSTRAINT constraint1 FOR (P:Person) REQUIRED P.name is UNIQUE 
+
+
+2) EXISTENCE Constraint 
+-- Ensures a property exists on all nodes or relationships of a certain type.
+
+>>> CREATE CONSTRAINT constraint2 FOR (P:Person) REQUIRE P.name is NOT NULL 
+
+
+Relationship existence constraint 
+>>> CREATE CONSTRAINT constraint3 FOR () - [P:Rank] - () REQUIRE P.rank is NOT NULL
+
+
+3) Node Key Constraint
+-- Combination of composite uniqueness and existence constraint.
+
+>>> CREATE CONSTRAINT user_identity_key FOR (u:User) REQUIRE (u.firstName, u.lastName) IS NODE KEY
+
+
+
+
+============================================================================================================================================
+Neo4j Import and Export
+============================================================================================================================================
+Import:
+-- Requires Neo4j to have access to the import directory.
+-- you can change the directory by changing the below property - 
+>>> dbms.directories.import=import
+
+
+Neo4j only supports CSV load natively.
+APOC supports insertion of following file formats - 
+-- JSON 
+-- XML
+-- CSV 
+-- YAML 
+-- XLSX
+-- .properties 
+
+
+1) CSV - 
+
+LOAD CSV WITH HEADERS FROM "file:///data.csv" AS row
+CREATE (:Person {name: row.name, age: toInteger(row.age)})
+
+
+CALL apoc.load.csv("file:///data.csv") YIELD map AS row
+RETURN row
+
+
+with delimiter - 
+LOAD CSV WITH HEADERS FROM 'file:///your-file.csv' 
+AS row 
+FIELDTERMINATOR '|'
+RETURN row
+
+
+
+
+
+2) JSON - 
+
+CALL apoc.load.json("file:///data.json") YIELD value 
+UNWIND value AS row 
+CREATE (:Person {name: row.name})
+
+
+
+3) XML - 
+
+CALL apoc.load.xml("file:///data.xml") YIELD value 
+RETURN value
+
+
+
+4) XLSX - 
+
+CALL apoc.load.xls("file:///data.xlsx", "sheet_1") YIELD map as row 
+CREATE (:Person {name: row.name})
+
+
+
+5) YAML - 
+
+WITH "
+- name: Alice
+  age: 30
+- name: Bob
+  age: 40" AS yaml
+CALL apoc.convert.fromYamlList(yaml) YIELD value
+RETURN value
+
+
+
+6) .PROPERTIES 
+CALL apoc.load.properties("file:///settings.properties")
+YIELD key, value
+RETURN key, value
+
+
+
+**** LOADING LARGE CSV Files In batches using APOC 
+
+CALL apoc.periodic.iterate(
+  "LOAD CSV WITH HEADERS FROM 'file:///your_file.csv' AS row",
+  "
+  MERGE (p:Person {id: row.id})
+  SET p.name = row.name, p.age = toInteger(row.age)
+  ",
+  {batchSize: 1000, parallel: true}
+)
+
+
+CALL apoc.periodic.iterate(
+  "CALL apoc.load.csv('file:///your_file.csv', {sep: '|'}) YIELD map AS row",
+  "
+  MERGE (n:Node {id: row.id})
+  SET n.name = row.name
+  ",
+  {batchSize: 500, parallel: false}
+)
+
+
+
+
+============================================================================================================================================
+APOC PROCEDURES
+============================================================================================================================================
+Here’s a list of the **most commonly used APOC procedures** in Neo4j, categorized by usage, with brief descriptions and examples:
+
+---
+
+## 🔄 **1. Data Loading**
+
+| Procedure        | Description                                   | Example                                                |                               |
+| ---------------- | --------------------------------------------- | ------------------------------------------------------ | ----------------------------- |
+| `apoc.load.csv`  | Load CSV with custom delimiter, quotes, types | \`CALL apoc.load.csv('file:///data.csv', {sep:'        | ', header\:true}) YIELD map\` |
+| `apoc.load.json` | Load JSON from URL or file                    | `CALL apoc.load.json('file:///data.json') YIELD value` |                               |
+| `apoc.load.xml`  | Load and parse XML                            | `CALL apoc.load.xml('file:///data.xml')`               |                               |
+| ---------------- | --------------------------------------------- | ------------------------------------------------------ | ----------------------------- |
+
+---
+
+## ⚙️ **2. Batch Processing**
+
+| Procedure               | Description                                               | Example                                                                                |
+| ----------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `apoc.periodic.iterate` | Process large datasets in batches                         | See previous example for batch loading                                                 |
+| `apoc.periodic.commit`  | Similar to `iterate`, more flexible for standalone Cypher | `CALL apoc.periodic.commit("MATCH (n) RETURN n", "SET n.flag=true", {batchSize:1000})` |
+| ----------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+
+---
+
+## 🔍 **3. Path & Graph Exploration**
+
+| Procedure                | Description                          | Example                                                             |
+| ------------------------ | ------------------------------------ | ------------------------------------------------------------------- |
+| `apoc.path.expand`       | Expand path from a node with filters | `CALL apoc.path.expand(start, 'FRIEND', '', 1, 5)`                  |
+| `apoc.path.spanningTree` | Build a spanning tree from node      | `CALL apoc.path.spanningTree(start, {relationshipFilter:'FRIEND'})` |
+| ------------------------ | ------------------------------------ | ------------------------------------------------------------------- |
+
+---
+
+## 🔄 **4. Graph Refactoring & Maintenance**
+
+| Procedure                  | Description                                | Example                                                          |
+| -------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+| `apoc.refactor.mergeNodes` | Merge multiple nodes into one              | `CALL apoc.refactor.mergeNodes([n1,n2], {properties:'combine'})` |
+| `apoc.refactor.to`         | Convert one node/rel to another label/type | `CALL apoc.refactor.to(n, 'NewLabel')`                           |
+| -------------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
+
+---
+
+## 📈 **5. Schema & Metadata**
+
+| Procedure          | Description                                | Example                   |
+| ------------------ | ------------------------------------------ | ------------------------- |
+| `apoc.meta.schema` | Inspect graph schema                       | `CALL apoc.meta.schema()` |
+| `apoc.meta.stats`  | Returns counts of labels, rels, properties | `CALL apoc.meta.stats()`  |
+
+---
+
+## 🛠️ **6. Utility & Conversion**
+
+| Procedure                              | Description                  | Example                                                    |
+| -------------------------------------- | ---------------------------- | ---------------------------------------------------------- |
+| `apoc.convert.toMap()`                 | Convert a node/JSON to a map | `RETURN apoc.convert.toMap({name:'Neo', age:30})`          |
+| `apoc.date.parse` / `format`           | Parse/format date strings    | `RETURN apoc.date.format(timestamp(), 'ms', 'yyyy-MM-dd')` |
+| `apoc.text.clean` / `join` / `replace` | String manipulation          | `RETURN apoc.text.replace("hello world", " ", "-")`        |
+
+---
+
+## 📦 **7. Exporting**
+
+| Procedure                | Description                 | Example                                                             |
+| ------------------------ | --------------------------- | ------------------------------------------------------------------- |
+| `apoc.export.csv.all`    | Export entire graph to CSV  | `CALL apoc.export.csv.all("all.csv", {})`                           |
+| `apoc.export.json.query` | Export query result as JSON | `CALL apoc.export.json.query("MATCH (n) RETURN n", "out.json", {})` |
+| ------------------------ | --------------------------- | ------------------------------------------------------------------- |
+
+---
+
+## 🔗 **8. Relationship Handling**
+
+| Procedure                  | Description                        | Example                                                 |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------- |
+| `apoc.create.relationship` | Create relationship dynamically    | `CALL apoc.create.relationship(n1, 'KNOWS', {}, n2)`    |
+| `apoc.merge.relationship`  | Merge relationship with properties | `CALL apoc.merge.relationship(n1, 'KNOWS', {}, {}, n2)` |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------- |
+
+---
+
+
+
+
+============================================================================================================================================
+Neo4j Graph Data Science (GDS)
+============================================================================================================================================
+1) PageRank => finds 
+
+
+
+
+
+
+
+
+
+
+============================================================================================================================================
+Neo4j Set up properties 
+============================================================================================================================================
+1) Cluster Member type: 
+-- neo4j.conf
+>>> dbms.mode=CORE
+>>> dbms.mode=READ_REPLICA 
+
+
+2) Cluster size and discovery:
+-- This tells the cluster that it requires at least three core servers to be running before the initial formation process can complete
+
+>>> causal_clustering.minimum_core_cluster_size_at_formation=3: 
+
+-- This ensures that the cluster requires a quorum (a majority of core servers) of three to remain online to be able to accept write operations.
+If the number of online core servers drops below this, the cluster will enter a read-only state
+
+>>> causal_clustering.minimum_core_cluster_size_at_runtime=3: 
+
+
+-- This is a critical setting. On each server, you must provide a comma-separated list of the discovery endpoints for all three core servers. 
+This allows the servers to find each other and form the cluster. The host should be the public IP or hostname, and the port is the one used 
+for the discovery service.
+
+>>> causal_clustering.initial_discovery_members=host1:port1,host2:port2,host3:port3
+
+
+4) Network Settings:
+-- This allows the server to listen on all network interfaces. This is generally necessary for cluster members to communicate with each other 
+over the network.
+
+>>> dbms.default_listen_address=0.0.0.0
+
+-- This is how other cluster members and clients know how to contact this specific server. It should be the public IP or hostname of the server. 
+This value is unique for each of the three servers
+
+>>> dbms.default_advertised_address=your_servers_ip
+
+
+
+5) Cluster Communication ports:
+-- Used by members to find each other and to announce their presence. The port must be unique for each server if running on the same host 
+(e.g., :5000, :5001, :5002).
+
+>>> causal_clustering.discovery_listen_address=:5000
+
+
+-- Used for transaction replication between core members
+
+>>> causal_clustering.transaction_listen_address=:6000
+
+
+-- Used for the Raft protocol, which handles leader election and consensus
+>>> causal_clustering.raft_listen_address=:7000
+
+
+
+6) Client Connector Ports:
+-- The primary port for the Bolt protocol, used by drivers and the Neo4j Browser for communication
+
+>>> dbms.connector.bolt.listen_address=:7687
+
+-- The HTTP port for the web interface
+>>> dbms.connector.http.listen_address=:7474
+
+
 
 
 
