@@ -23,7 +23,7 @@ Make sure the GDS plugin is installed:
 
 ---
 
-✅ **Example 1: PageRank (Influence)**
+### ✅ **Example 1: PageRank (Influence)**
 -- Purpose: Measures the influence or importance of a node within the network.
 -- How it Works: It's an iterative algorithm that gives a node a high score if it is pointed to by many other nodes, especially if those 
 other nodes also have high scores. It's like a democratic election where influential nodes "vote" for other nodes they are connected to.
@@ -31,7 +31,7 @@ other nodes also have high scores. It's like a democratic election where influen
 in a knowledge graph.
   
 
-
+```cypher
 // Step 1: Create in-memory projection
 CALL gds.graph.project(
   'pagerank-graph',
@@ -43,15 +43,15 @@ CALL gds.graph.project(
 CALL gds.pageRank.write('pagerank-graph', {
   writeProperty: 'pagerank'
 });
-
+```
 
 ---
 
-✅ **Example 2: Community Detection (Louvain)**
--- Purpose: A community detection algorithm that finds densely connected groups (communities) of nodes in a graph.
--- How it Works: It iteratively assigns nodes to communities to maximize a value called "modularity." Modularity measures how much more 
+### ✅ **Example 2: Community Detection (Louvain)**
+** Purpose: A community detection algorithm that finds densely connected groups (communities) of nodes in a graph.
+** How it Works: It iteratively assigns nodes to communities to maximize a value called "modularity." Modularity measures how much more 
 connected nodes are within a community than they would be in a random network.
--- Use Case: Finding customer segments with similar behaviors, detecting social circles in a network, or identifying fraud rings where bad 
+** Use Case: Finding customer segments with similar behaviors, detecting social circles in a network, or identifying fraud rings where bad 
 actors are unusually interconnected.
 
 
@@ -74,7 +74,7 @@ CALL gds.louvain.write('louvain-graph', {
 
 ---
 
-✅ **Example 3: Similarity (Node Similarity)**
+### ✅ **Example 3: Similarity (Node Similarity)**
 -- Purpose: Measures the similarity between pairs of nodes based on their shared connections.
 -- How it Works: It compares the neighbors of two nodes to determine how much they have in common. Common metrics include Jaccard Similarity 
 (the ratio of shared neighbors to total neighbors) or Cosine Similarity.
