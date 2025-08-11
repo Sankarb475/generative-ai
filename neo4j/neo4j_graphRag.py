@@ -168,6 +168,59 @@ The cluster's router will ensure that the read is served by an instance that has
 
 
 ============================================================================================================================================
+Neo4j MEMORY 
+============================================================================================================================================
++-------------------------------------------------------------+
+|                     Total Physical RAM                      |
++------------------+--------------------+--------------------+
+| Heap (JVM)       | Page Cache (Neo4j) | OS & Other Memory   |
+| - Query states   | - Graph store data | - FS cache          |
+| - Plans          | - Index structures | - Logs & buffers    |
+| - Transactions   | - Disk-mapped pages| - Native libs       |
++------------------+--------------------+--------------------+
+
+
+
+2. Page Cache
+-- Neo4j’s own native cache for storing graph data on disk (nodes, relationships, properties) in memory-mapped pages.
+-- It does not store query plans or intermediate results — that’s the heap’s job.
+
+Why it matters:
+-- Every traversal (MATCH pattern) first hits the page cache to fetch graph data before doing any in-heap processing.
+-- A large enough page cache means most queries avoid disk I/O entirely.
+
+Controlled by:
+>>> dbms.memory.pagecache.size
+Usually set to ~50–75% of available RAM after heap is allocated.
+
+
+
+1) Heap Memory
+Controlled by:
+dbms.memory.heap.initial_size and dbms.memory.heap.max_size (usually set equal for stability).
+Tuning tip:
+Heap should be big enough for concurrent query load, but not so big that GC pauses become long.
+
+
+
+
+============================================================================================================================================
+Neo4j Production Issues 
+============================================================================================================================================
+1) lack of distributed computing 
+
+
+2) schema evolution requires significant effort, anbd brings challenges 
+
+
+3) Enterprise features (clustering, Fabric) are expensive
+
+
+4) Array properties become bottlenecks as they grow
+
+
+
+============================================================================================================================================
 Neo4j INDEX and CONSTRAINTS
 ============================================================================================================================================
 *** INDEXES 
