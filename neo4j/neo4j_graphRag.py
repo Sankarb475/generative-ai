@@ -65,6 +65,60 @@ This is a very advanced scaling technique
 databases. This is a complex, Enterprise-only feature for highly distributed data
 
 
+
+============================================================================================================================================
+PROPERTY GRAPH VS RDF
+============================================================================================================================================
+RDF (Resource Description Framework)
+-- Data Model: Triple-based — subject, predicate, object
+
+<Sankar> <worksAt> <EPAM>
+
+
+-- Uses ontologies (RDFS, OWL) to define classes & relationships.
+-- Query Language: SPARQL
+
+
+Property Graph - 
+-- Nodes and relationships, both can have key-value properties.
+
+Node: Person {name: "Sankar"}
+Relationship: WORKS_AT {since: 2024}
+
+-- Schema: Optional — flexible and schema-less by default.
+-- Storage: Stored in graph databases like Neo4j, JanusGraph, Cosmos DB (Gremlin API)
+-- Query Languages: Cypher, Gremlin, GSQL, openCypher.
+-- Focus: Operational graph analytics, fast traversals, pattern queries.
+
+
+============================================================================================================================================
+Migration from a SQL database to Neo4j graph database
+============================================================================================================================================
+1️⃣ Understand the Existing Relational Model
+-- Review ER diagrams (tables, columns, PKs, FKs).
+-- Identify entities (candidates for nodes) and relationships (candidates for edges).
+
+2️⃣ Design the Graph Model
+-- decide labels 
+-- relationship types 
+
+3️⃣ Prepare the Data (ETL)
+Use SSIS or Python scripts to export relational data into CSV files:
+-- One CSV for each node label.
+-- One CSV for each relationship type.
+
+4️⃣ Load into the Graph Database
+Option 1: Use Neo4j Bulk Import Tool (best for large datasets, offline import).
+Option 2: Use Cypher LOAD CSV:
+
+5️⃣ Validate Data Integrity
+Check node counts vs original tables.
+Check relationship counts vs original foreign key counts.
+Run test queries to ensure data correctness.
+
+7️⃣ Optimize & Index
+
+
 ============================================================================================================================================
 Neo4j Read, Write, High Availability
 ============================================================================================================================================
